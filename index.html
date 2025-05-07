@@ -1,10 +1,11 @@
 <!DOCTYPE html>
+
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Poker Evaluator</title>
-  <style>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Xerialz Poker Evaluator</title>
+<style>
     body { background: #121212; color: #eee; font-family: sans-serif; padding: 20px; }
     h1 { font-size: 1.5em; }
     select, button {
@@ -18,32 +19,28 @@
     .card-select { display: flex; flex-direction: column; }
     .card-group { display: flex; gap: 10px; flex-wrap: wrap; }
     .results { margin-top: 1em; background: #1e1e1e; padding: 1em; border-radius: 6px; border: 1px solid #333; }
-  </style>
-</head>
+  
+body { text-align: center; max-width: 800px; margin: auto; }
+</style>
+<meta content="yes" name="apple-mobile-web-app-capable"/><meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"/><meta content="Xerialz Poker Evaluator" name="apple-mobile-web-app-title"/><link href="manifest.json" rel="manifest"/><link href="icon.png" rel="apple-touch-icon"/></head>
 <body>
-<h1>Poker Evaluator</h1>
-
+<h1>Xerialz Poker Evaluator</h1>
 <h3>Player Hand</h3>
 <div class="card-group" id="player-hand"></div>
 <button onclick="clearCards('player-hand')">🂡 ล้างไพ่บนมือ</button>
-
 <h3>Board</h3>
 <div class="card-group" id="board"></div>
 <button onclick="clearCards('board')">🂠 ล้างไพ่บนโต๊ะ</button>
-
 <div>
-  <label>ผู้เล่นที่เหลือ (ไม่รวมตัวเรา): </label>
-  <select id="opponents"></select>
+<label>ผู้เล่นที่เหลือ (ไม่รวมตัวเรา): </label>
+<select id="opponents"></select>
 </div>
-
-<br>
+<br/>
 <button onclick="evaluateAll()">🎯 Evaluate + Equity</button>
 <button onclick="resetAll()">🔁 รีเซ็ต</button>
-
 <label>เงินที่ถืออยู่ (stack):</label>
-<input type="number" id="stack" value="1000" min="1" step="100"><br><br>
+<input id="stack" min="1" step="100" type="number" value="1000"/><br/><br/>
 <div class="results" id="result"></div>
-
 <script>
 const ranks = ["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
 const suits = ["♥","♦","♠","♣"];
@@ -222,9 +219,16 @@ function getGTORecommendation(card1, card2) {
 }
 
 </script>
-</body>
+<footer style="margin-top: 2em; font-size: 0.9em; color: #999;">เวอร์ชั่น 1.0 — ระบบนี้ใช้ GTO Preflop Chart (BTN RFI) ร่วมกับ Monte Carlo Simulation 10,000 รอบเพื่อคำนวณ Equity และให้คำแนะนำโดยอิงจากความน่าจะเป็นทางคณิตศาสตร์จริง</footer><script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('service-worker.js')
+      .then(reg => console.log('Service Worker registered:', reg))
+      .catch(err => console.error('Service Worker registration failed:', err));
+  });
+}
+</script></body>
 </html>
-
 <script>
 
 
