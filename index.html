@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Poker Evaluator</title>
+  <style>
+    body { background: #121212; color: #eee; font-family: sans-serif; padding: 20px; }
+    h1 { font-size: 1.5em; }
+    select, button {
+      margin: .3em; padding: .5em;
+      background: #1e1e1e; color: #eee;
+      border: 1px solid #555; border-radius: 4px;
+    }
+    select option.red { color: red; }
+    select option.black { color: #aaa; }
+    select option.disabled { color: #666; }
+    .card-select { display: flex; flex-direction: column; }
+    .card-group { display: flex; gap: 10px; flex-wrap: wrap; }
+    .results { margin-top: 1em; background: #1e1e1e; padding: 1em; border-radius: 6px; border: 1px solid #333; }
+  </style>
+</head>
+<body>
+<h1>Poker Evaluator</h1>
+
+<h3>Player Hand</h3>
+<div class="card-group" id="player-hand"></div>
+<button onclick="clearCards('player-hand')">🂡 ล้างไพ่บนมือ</button>
+
+<h3>Board</h3>
+<div class="card-group" id="board"></div>
+<button onclick="clearCards('board')">🂠 ล้างไพ่บนโต๊ะ</button>
+
+<div>
+  <label>ผู้เล่นที่เหลือ (ไม่รวมตัวเรา): </label>
+  <select id="opponents"></select>
+</div>
+
+<br>
+<button onclick="evaluateAll()">🎯 Evaluate + Equity</button>
+<button onclick="resetAll()">🔁 รีเซ็ต</button>
+
+<label>เงินที่ถืออยู่ (stack):</label>
+<input type="number" id="stack" value="1000" min="1" step="100"><br><br>
+<div class="results" id="result"></div>
+
+<script>
+const ranks = ["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
+const suits = ["♥","♦","♠","♣"];
+const displayToValue = {"10":"T"};
+let selectedCards = new Set();
+
+function createCardSelector(containerId, count) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = "";
+  for (let i = 0; i < count; i++) {
+    const wrap = document.createElement("div");
+    wrap.className = "card-select";
+    const rankSel = document.createElement("select");
+    const suitSel = document.createElement("select");
+    rankSel.innerHTML = '<option value="">Rank</option>' + ranks.map(r => `<option value="${r}">${r}</option>`).join("");
+    suitSel.innerHTML = '<option value="">Suit</option>' + suits.map(s => {
+      const color = (s === "♥" || s === "♦") ? "red" : "black";
+      return `<option value="${s}" class="${color}">${s}</option>`;
+    }).join("");
+    rankSel.onchange = suitSel.onchange = () => enforceUniqueCards();
+    wrap.appendChild(rankSel);
+    wrap.appendChild(suitSel);
+    container.appendChild(wrap);
+  }
+}
+
+function 
+enforceUniqueCards() {
+  selectedCards = new Set();
+  document.querySelectorAll(".card-select").forEach(wrapper => {
+    const r = wrapper.children[0].value, s = wrapper.children[1].value;
+    if (r && s) selectedCards.add((displayToValue[r] || r) + s);
+  });
+
+  document.querySelectorAll(".card-select").forEach(wrapper => {
+    const rSel = wrapper.children[0], sSel = wrapper.children[1];
+    const currentKey = (displayToValue[rSel.value] || rSel.value) + sSel.value;
+
+    [...rSel.options].forEach(opt => {
+      if (!opt.value) return;
+      const key = (displayToValue[opt.value] || opt.value) + sSel.value;
+      opt.disabled = sSel.value && key !== currentKey && selectedCards.has(key);
+    });
+
+    [...sSel.options].forEach(opt => {
+      if (!opt.value) return;
+      const key = (displayToValue[rSel.value] || rSel.value) + opt.value;
+      opt.disabled = rSel.value && key !== currentKey && selectedCards.has(key);
+      opt.style.color = opt.disabled ? "#666" : (["♥","♦"].includes(opt.value) ? "red" : "#ccc");
+    });
+  });
+}
+
+
+
+function getCardsFrom(containerId) {
+  const cards = [];
+  document.querySelectorAll(`#${containerId} .card-select`).forEach(w => {
+    const r = w.children[0].value, s = w.children[1].value;
+    if (r && s) cards.push((displayToValue[r] || r) + s);
+  });
+  return cards;
+}
+
+
+
+function getSklanskyTier(c1, c2) {
+  const t = {
+    "AA":1,"KK":1,"QQ":1,"AKs":1,"JJ":2,"TT":2,"AQs":2,"AJs":2,"KQs":2,"AKo":2,
+    "99":3,"ATs":3,"KJs":3,"QJs":3,"JTs":3,"AQo":3,"88":4,"KTs":4,"QTs":4,"J9s":4,
+    "T9s":4,"AJo":4,"77":5,"66":5,"55":5,"A9s":5,"KJo":5,"QJo":5,"44":6,"33":6,
+    "22":6,"A8s":6,"A5s":6,"KTo":6,"JTo":6,"A7s":7,"A6s":7,"A4s":7,"A3s":7,"A2s":7,
+    "K9s":7,"Q9s":7,"T8s":7,"98s":8,"87s":8,"76s":8,"65s":8,"54s":8,"K8s":8,
+    "Q8s":8,"J8s":8,"32s":9,"72o":9,"84o":9,"95o":9,"T2o":9,"J3o":9,"Q4o":9
+  };
+  const [r1, s1] = rns(c1), [r2, s2] = rns(c2), suited = s1 === s2;
+  const sorted = [r1, r2].sort((a,b)=>rv(b)-rv(a));
+  const key = sorted[0] + sorted[1] + (r1 === r2 ? "" : suited ? "s" : "o");
+  return t[key] || 9;
+}
+
+function rv(r) {
+  return ["2","3","4","5","6","7","8","9","T","J","Q","K","A"].indexOf(r);
+}
+
+function rns(card) {
+  const suit = card.slice(-1);
+  const rank = displayToValue[card.slice(0, -1)] || card.slice(0, -1);
+  return [rank, suit];
+}
+
+function getDrawSuggestion(hand, board) {
+  const all = [...hand, ...board];
+  const suits = {}, nums = [];
+  all.forEach(c => {
+    const [r, s] = rns(c);
+    suits[s] = (suits[s] || 0) + 1;
+    nums.push(rv(r));
+  });
+  let out = "";
+  if (Object.values(suits).some(v => v === 4)) out += "Flush Draw<br>";
+  const u = [...new Set(nums)].sort((a, b) => a - b);
+  for (let i = 0; i <= u.length - 4; i++) {
+    const gap = u[i + 3] - u[i];
+    if (gap === 3) return out + "Straight Draw (Open-ended)<br>";
+    if (gap === 4) return out + "Straight Draw (Gutshot)<br>";
+  }
+  return out;
+}
+
+function evaluateHandRank(cards) {
+  const getv = c => rv(rns(c)[0]);
+  const counts = {};
+  cards.forEach(c => { const v = getv(c); counts[v] = (counts[v] || 0) + 1; });
+  const vals = Object.entries(counts).map(([v,c])=>[+v,c]).sort((a,b)=>b[1]-a[1]||b[0]-a[0]);
+  const max = vals[0][1];
+  if (max === 4) return [7, vals[0][0]];
+  if (max === 3 && vals[1]?.[1] >= 2) return [6, vals[0][0]];
+  const flush = suits.find(s => cards.filter(c => c.includes(s)).length >= 5);
+  if (flush) {
+    const fs = cards.filter(c => c.includes(flush)).map(getv).sort((a,b)=>b-a);
+    if (fs[0]-fs[4] === 4) return [8, fs[0]];
+    if (fs.includes(12) && fs.slice(1,5).join("") === "10987") return [9,12];
+    return [5, fs[0]];
+  }
+  const ranks = [...new Set(cards.map(getv))].sort((a,b)=>b-a);
+  for (let i=0;i<=ranks.length-5;i++) if (ranks[i]-ranks[i+4]===4) return [4, ranks[i]];
+  if (max===3) return [3, vals[0][0]];
+  if (max===2 && vals[1]?.[1]===2) return [2, vals[0][0]];
+  if (max===2) return [1, vals[0][0]];
+  return [0, ranks[0]];
+}
+
+function handRankName(v) {
+  return ["High Card","One Pair","Two Pair","Three of a Kind","Straight","Flush","Full House","Four of a Kind","Straight Flush","Royal Flush"][v];
+}
+
+function clearCards(id) {
+  document.querySelectorAll(`#${id} select`).forEach(s => s.selectedIndex = 0);
+  enforceUniqueCards(); document.getElementById("result").innerHTML = "";
+}
+
+function resetAll() {
+  clearCards("player-hand"); clearCards("board"); document.getElementById("result").innerHTML = "";
+}
+
+window.onload = () => {
+  createCardSelector("player-hand", 2);
+  createCardSelector("board", 5);
+  const oppSel = document.getElementById("opponents");
+  for (let i = 1; i <= 9; i++) {
+    const opt = document.createElement("option");
+    opt.value = i;
+    opt.textContent = i;
+    oppSel.appendChild(opt);
+  }
+};
+
+
+function getGTORecommendation(card1, card2) {
+  const [r1, s1] = rns(card1), [r2, s2] = rns(card2);
+  const suited = s1 === s2;
+  const sorted = [r1, r2].sort((a,b)=>rv(b)-rv(a));
+  const hand = sorted[0] + sorted[1] + (r1 === r2 ? "" : suited ? "s" : "o");
+
+  // Basic GTO RFI from BTN (simplified)
+  const raiseHands = new Set([
+    "AA","KK","QQ","JJ","TT","99","88","77","66","55","44","33","22",
+    "AKs","AQs","AJs","ATs","A9s","A8s","A7s","A6s","A5s","A4s","A3s","A2s",
+    "KQs","KJs","KTs","QJs","QTs","JTs","T9s","98s","87s","76s","65s","54s",
+    "AKo","AQo","AJo","KQo","KJo","QJo"
+  ]);
+
+  if (raiseHands.has(hand)) return "raise";
+  else return "fold";
+}
+
+</script>
+</body>
+</html>
+
+<script>
+
+
+function evaluateAll() {
+  const hand = getCardsFrom("player-hand");
+  const board = getCardsFrom("board");
+  const opp = parseInt(document.getElementById("opponents").value || "1");
+  const stack = parseInt(document.getElementById("stack").value || "0");
+
+  if (hand.length < 2) {
+    alert("กรุณาเลือกไพ่บนมือให้ครบ 2 ใบ");
+    return;
+  }
+
+  const fullDeck = [];
+  const allRanks = ["A","2","3","4","5","6","7","8","9","T","J","Q","K"];
+  allRanks.forEach(r => suits.forEach(s => {
+    const card = r + s;
+    if (![...hand, ...board].includes(card)) fullDeck.push(card);
+  }));
+
+  const gto = getGTORecommendation(hand[0], hand[1]);
+  const draw = getDrawSuggestion(hand, board);
+  const myRank = evaluateHandRank([...hand, ...board]);
+  const myRankName = handRankName(myRank[0]);
+
+  let win = 0, tie = 0, loss = 0;
+  const sims = 10000;
+  for (let i = 0; i < sims; i++) {
+    const shuffled = [...fullDeck].sort(() => 0.5 - Math.random());
+    const opps = [];
+    for (let j = 0; j < opp; j++) opps.push([shuffled[j*2], shuffled[j*2+1]]);
+    const remBoard = board.concat(shuffled.slice(opp*2, opp*2 + (5 - board.length)));
+    const myPower = evaluateHandRank([...hand, ...remBoard]);
+    let better = 0, equal = 0;
+    for (const o of opps) {
+      const oPower = evaluateHandRank([...o, ...remBoard]);
+      if (oPower[0] > myPower[0] || (oPower[0] === myPower[0] && oPower[1] > myPower[1])) better++;
+      else if (oPower[0] === myPower[0] && oPower[1] === myPower[1]) equal++;
+    }
+    if (better === 0 && equal === 0) win++;
+    else if (better === 0) tie++;
+    else loss++;
+  }
+
+  const equity = win / sims;
+  let advice = "", raisePct = 0;
+  if (gto === "fold") {
+    advice = "แนะนำ: ❌ หมอบ";
+  } else if (gto === "raise" && equity < 0.55) {
+    advice = "แนะนำ: ✔️ ตามได้";
+  } else if (gto === "raise" && equity >= 0.55) {
+    advice = "แนะนำ: ✅ ควรเกเพิ่ม";
+    if (equity >= 0.85) raisePct = 0.7;
+    else if (equity >= 0.75) raisePct = 0.5;
+    else if (equity >= 0.65) raisePct = 0.35;
+    else raisePct = 0.2;
+    const raiseAmt = Math.round(raisePct * stack);
+    advice += "<br>ควรเกเพิ่มประมาณ " + raiseAmt + " chips (" + Math.round(raisePct * 100) + "% ของ stack)";
+  }
+
+  let html = "";
+  html += `<strong>GTO Suggestion:</strong> ${gto}<br>`;
+  html += `<strong>Draw Suggestion:</strong> ${draw || "None"}<br>`;
+  html += `<strong>Hand:</strong> ${myRankName}<br>`;
+  html += `<hr><strong>Equity vs ${opp} player(s):</strong><br>`;
+  html += `Win: ${(win/sims*100).toFixed(1)}%<br>`;
+  html += `Tie: ${(tie/sims*100).toFixed(1)}%<br>`;
+  html += `Loss: ${(loss/sims*100).toFixed(1)}%<br>`;
+  html += `<hr><strong>${advice}</strong>`;
+  document.getElementById("result").innerHTML = html;
+}
+
+
+
+
+function getGTORecommendation(card1, card2) {
+  const [r1, s1] = rns(card1), [r2, s2] = rns(card2);
+  const suited = s1 === s2;
+  const sorted = [r1, r2].sort((a,b)=>rv(b)-rv(a));
+  const hand = sorted[0] + sorted[1] + (r1 === r2 ? "" : suited ? "s" : "o");
+
+  // Basic GTO RFI from BTN (simplified)
+  const raiseHands = new Set([
+    "AA","KK","QQ","JJ","TT","99","88","77","66","55","44","33","22",
+    "AKs","AQs","AJs","ATs","A9s","A8s","A7s","A6s","A5s","A4s","A3s","A2s",
+    "KQs","KJs","KTs","QJs","QTs","JTs","T9s","98s","87s","76s","65s","54s",
+    "AKo","AQo","AJo","KQo","KJo","QJo"
+  ]);
+
+  if (raiseHands.has(hand)) return "raise";
+  else return "fold";
+}
+
+</script>
