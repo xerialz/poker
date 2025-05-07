@@ -227,11 +227,34 @@ if ('serviceWorker' in navigator) {
       .catch(err => console.error('Service Worker registration failed:', err));
   });
 }
-</script></body>
-</html>
-<script>
+</script><script>
+function getHandsThatBeatMe(myPower, board, usedCards) {
+  const handsThatBeat = [];
+  const fullDeck = [];
+  const allRanks = ["A","2","3","4","5","6","7","8","9","T","J","Q","K"];
+  const suits = ["♥","♦","♠","♣"];
+  allRanks.forEach(r => suits.forEach(s => {
+    const card = r + s;
+    if (!usedCards.includes(card)) fullDeck.push(card);
+  }));
 
+  for (let i = 0; i < fullDeck.length; i++) {
+    for (let j = i + 1; j < fullDeck.length; j++) {
+      const oppHand = [fullDeck[i], fullDeck[j]];
+      const oppPower = evaluateHandRank([...oppHand, ...board]);
+      if (
+        oppPower[0] > myPower[0] ||
+        (oppPower[0] === myPower[0] && oppPower[1] > myPower[1])
+      ) {
+        handsThatBeat.push(oppHand.join(", "));
+      }
+    }
+  }
 
+  const sample = handsThatBeat.slice(0, 5); // just show first 5 examples
+  return sample.length > 0 ? sample : ["ไม่พบชุดไพ่ที่ชนะชัดเจน"];
+}
+</script><script></script><script>
 function evaluateAll() {
   const hand = getCardsFrom("player-hand");
   const board = getCardsFrom("board");
@@ -245,6 +268,7 @@ function evaluateAll() {
 
   const fullDeck = [];
   const allRanks = ["A","2","3","4","5","6","7","8","9","T","J","Q","K"];
+  const suits = ["♥","♦","♠","♣"];
   allRanks.forEach(r => suits.forEach(s => {
     const card = r + s;
     if (![...hand, ...board].includes(card)) fullDeck.push(card);
@@ -299,28 +323,10 @@ function evaluateAll() {
   html += `Tie: ${(tie/sims*100).toFixed(1)}%<br>`;
   html += `Loss: ${(loss/sims*100).toFixed(1)}%<br>`;
   html += `<hr><strong>${advice}</strong>`;
+
+  const beaters = getHandsThatBeatMe(myRank, board, [...hand, ...board]);
+  html += "<hr><strong>ตัวอย่างไพ่ที่อาจชนะคุณ:</strong><br>" + beaters.join("<br>");
   document.getElementById("result").innerHTML = html;
 }
-
-
-
-
-function getGTORecommendation(card1, card2) {
-  const [r1, s1] = rns(card1), [r2, s2] = rns(card2);
-  const suited = s1 === s2;
-  const sorted = [r1, r2].sort((a,b)=>rv(b)-rv(a));
-  const hand = sorted[0] + sorted[1] + (r1 === r2 ? "" : suited ? "s" : "o");
-
-  // Basic GTO RFI from BTN (simplified)
-  const raiseHands = new Set([
-    "AA","KK","QQ","JJ","TT","99","88","77","66","55","44","33","22",
-    "AKs","AQs","AJs","ATs","A9s","A8s","A7s","A6s","A5s","A4s","A3s","A2s",
-    "KQs","KJs","KTs","QJs","QTs","JTs","T9s","98s","87s","76s","65s","54s",
-    "AKo","AQo","AJo","KQo","KJo","QJo"
-  ]);
-
-  if (raiseHands.has(hand)) return "raise";
-  else return "fold";
-}
-
-</script>
+</script></body>
+</html>
