@@ -127,7 +127,7 @@ body { text-align: center; max-width: 800px; margin: auto; }
 <label>เงินที่ถืออยู่ (stack):</label>
 <input id="stack" min="1" step="100" type="number" value="1000"/><br/><br/>
 <div class="results" id="result"></div>
-<footer style="margin-top: 2em; font-size: 0.9em; color: #999;">เวอร์ชั่น 1.1 — ระบบนี้ใช้ GTO Preflop Chart (แยกตามตำแหน่งจริง: UTG, HJ, CO, BTN, SB, BB) ร่วมกับ Monte Carlo Simulation 5,000 รอบ เพื่อคำนวณ Equity และให้คำแนะนำโดยอิงจากตำแหน่ง, ความแข็งของมือ, draw ที่เป็นไปได้, และความน่าจะเป็นเชิงกลยุทธ์อย่างแม่นยำ</footer><script>
+<footer style="margin-top: 2em; font-size: 0.9em; color: #999;">เวอร์ชั่น 1.2 — ระบบนี้ใช้ GTO Preflop Chart (แยกตามตำแหน่ง: UTG, HJ, CO, BTN, SB, BB) ร่วมกับ Monte Carlo Simulation 5,000 รอบ เพื่อคำนวณ Equity และให้คำแนะนำโดยอิงจากตำแหน่ง, ความแข็งของมือ, draw ที่เป็นไปได้, Board Texture (Wet/Dry), Hand Classification และบริบทความเสี่ยงที่อาจเกิดขึ้น</footer><script>
 const suits = ["♥", "♦", "♣", "♠"];
 const ranks = ["A","K","Q","J","10","9","8","7","6","5","4","3","2"];
 let selectedCards = [];
@@ -396,7 +396,53 @@ function evaluateAll() {
   html += `Tie: ${(tie/sims*100).toFixed(1)}%<br>`;
   html += `Loss: ${(loss/sims*100).toFixed(1)}%<br>`;
   html += `<hr><strong>${advice}</strong><br><em>${explain}</em>${extra}`;
+  
+  const handClass = classifyHandRank(hand, board);
+  const boardType = classifyBoardTexture(board);
+  html += `<hr><strong>Hand Classification:</strong> ${handClass}<br>`;
+  html += `<strong>Board Texture:</strong> ${boardType}`;
   document.getElementById("result").innerHTML = html;
+
+}
+
+function classifyHandRank(hand, board) {
+  const all = [...hand, ...board];
+  const rankCount = {};
+  const ranks = ["2","3","4","5","6","7","8","9","T","J","Q","K","A"];
+  all.forEach(c => {
+    const r = c.slice(0, -1).replace("10", "T");
+    rankCount[r] = (rankCount[r] || 0) + 1;
+  });
+
+  const [r1, r2] = hand.map(c => c.slice(0, -1).replace("10", "T"));
+  const isPair = r1 === r2;
+  const boardRanks = board.map(c => c.slice(0, -1).replace("10", "T"));
+
+  if (isPair && boardRanks.includes(r1)) return "Full House or Set";
+  if (isPair) return "Overpair or Pocket Pair";
+  if (boardRanks.includes(r1) || boardRanks.includes(r2)) return "Top Pair or Pair";
+  return "Unpaired / High Cards";
+}
+
+function classifyBoardTexture(board) {
+  const suits = {};
+  const ranks = [];
+  board.forEach(c => {
+    const [r, s] = [c.slice(0, -1).replace("10", "T"), c.slice(-1)];
+    suits[s] = (suits[s] || 0) + 1;
+    ranks.push("A23456789TJQK".indexOf(r));
+  });
+
+  const isFlushy = Object.values(suits).some(v => v >= 3);
+  ranks.sort((a, b) => a - b);
+  let straighty = false;
+  for (let i = 0; i <= ranks.length - 3; i++) {
+    if (ranks[i + 2] - ranks[i] <= 3) straighty = true;
+  }
+
+  if (isFlushy && straighty) return "Very Wet (Flush + Straight possibilities)";
+  if (isFlushy || straighty) return "Wet (Draw-heavy)";
+  return "Dry (Low connectivity)";
 }
 </script></body>
 </html>
